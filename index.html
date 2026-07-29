@@ -51,6 +51,16 @@
   .ac-list{position:absolute;left:0;right:0;top:calc(100% + 2px);z-index:50;background:#fff;border:1px solid var(--bord);border-radius:8px;box-shadow:0 8px 22px rgba(0,0,0,.14);list-style:none;margin:0;padding:4px;max-height:240px;overflow:auto;display:none;}
   .ac-list li{padding:8px 10px;border-radius:6px;cursor:pointer;font-size:13px;color:#1c2430;}
   .ac-list li:hover,.ac-list li.active{background:#eef2fb;}
+  .modal-overlay{position:fixed;inset:0;background:rgba(13,13,13,.55);display:none;align-items:center;justify-content:center;z-index:1000;padding:16px;}
+  .modal-overlay.open{display:flex;}
+  .modal-box{background:#fff;border-radius:14px;padding:26px;max-width:460px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.3);text-align:center;}
+  .modal-box h3{margin:0 0 8px;color:var(--bleu);font-size:19px;}
+  .modal-box p{margin:0 0 20px;color:#5a6472;font-size:14px;}
+  .modal-actions{display:flex;gap:12px;flex-direction:column;}
+  .modal-actions button{width:100%;}
+  .mandant-type{display:flex;align-items:center;gap:12px;margin-bottom:14px;font-size:13px;color:#33404f;flex-wrap:wrap;background:#f4f6fb;border:1px solid #dbe2f0;border-radius:8px;padding:9px 12px;}
+  .mandant-type b{color:var(--bleu);}
+  button.small{padding:7px 14px;font-size:13px;}
 </style>
 </head>
 <body>
@@ -125,6 +135,17 @@
 </svg></div>
   <div class="sub">Génération PDF des mandats de vente Fabron</div>
 </header>
+
+<div id="mandant-modal" class="modal-overlay">
+  <div class="modal-box">
+    <h3>Le mandant est-il&nbsp;?</h3>
+    <p>Choisissez le type de mandant. Vous pourrez le modifier à tout moment.</p>
+    <div class="modal-actions">
+      <button class="primary" onclick="setMandantType('phys')">Personne physique</button>
+      <button class="primary" onclick="setMandantType('moral')">Personne morale (société)</button>
+    </div>
+  </div>
+</div>
 <div class="wrap">
   <fieldset class="type-fs">
     <legend>Type de mandat</legend>
@@ -148,8 +169,30 @@
 
   <fieldset>
     <legend>Le mandant (propriétaire)</legend>
-    <div class="row"><div class="field full"><label>Nom et prénom <small>— tous les co-propriétaires</small></label><input id="nom"></div></div>
-    <div class="row"><div class="field full"><label>Demeurant à <small>— adresse du domicile (saisie assistée)</small></label><div class="ac-wrap"><input id="dem" autocomplete="off"><ul class="ac-list" id="dem_ac"></ul></div></div></div>
+    <div class="mandant-type">
+      <span>Type de mandant : <b id="mtype-label">Personne physique</b></span>
+      <button type="button" class="ghost small" onclick="openMandantModal()">Modifier</button>
+    </div>
+    <div id="phys-fields">
+      <div class="row"><div class="field full"><label>Nom et prénom <small>— tous les co-propriétaires</small></label><input id="nom"></div></div>
+    </div>
+    <div id="moral-fields" style="display:none">
+      <div class="row">
+        <div class="field"><label>Forme juridique <small>(SAS, SARL, SCI…)</small></label><input id="pm_forme" placeholder="ex. SAS"></div>
+        <div class="field"><label>Nom société</label><input id="pm_nom" placeholder="ex. SAS BESS"></div>
+      </div>
+      <div class="row">
+        <div class="field"><label>Capital social</label><input id="pm_capital" placeholder="ex. 2000 euros"></div>
+        <div class="field"><label>SIREN</label><input id="pm_siren" placeholder="ex. 437 911 316"></div>
+      </div>
+      <div class="row"><div class="field full"><label>Adresse du siège social <small>(saisie assistée)</small></label><div class="ac-wrap"><input id="pm_adresse" autocomplete="off" placeholder="ex. 71 Boulevard de Cimiez, 06200 Nice"><ul class="ac-list" id="pm_adresse_ac"></ul></div></div></div>
+      <div class="row">
+        <div class="field"><label>Immatriculée au RCS de</label><input id="pm_rcs" placeholder="ex. Nice"></div>
+        <div class="field"><label>Gérant / représentant</label><input id="pm_gerant" placeholder="ex. Monsieur Bernard MASSINI"></div>
+      </div>
+      <p class="note" style="margin:2px 0 0">Ces informations sont assemblées en une phrase insérée automatiquement à la place du « Nom et prénom » sur le mandat.</p>
+    </div>
+    <div class="row" id="dem-row"><div class="field full"><label>Demeurant à <small>— adresse du domicile (saisie assistée)</small></label><div class="ac-wrap"><input id="dem" autocomplete="off"><ul class="ac-list" id="dem_ac"></ul></div></div></div>
     <div class="row">
       <div class="field"><label>N° téléphone</label><input id="tel"></div>
       <div class="field"><label>Email</label><input id="email"></div>
@@ -393,6 +436,32 @@ const ART = {
   excl:{exec:15,rgpd:28,rayes:30}, semi:{exec:14,rgpd:32,rayes:34,comm:17}, simple:{exec:16,rgpd:29,rayes:31},
   excl_sd:{rgpd:25,rayes:27}, semi_sd:{rgpd:29,rayes:31,comm:14}, simple_sd:{rgpd:26,rayes:28}
 };
+// --- Type de mandant : personne physique / morale ---
+let mandantType='phys';
+function openMandantModal(){ document.getElementById('mandant-modal').classList.add('open'); }
+function setMandantType(t){
+  mandantType=t;
+  document.getElementById('mandant-modal').classList.remove('open');
+  document.getElementById('phys-fields').style.display=(t==='phys')?'block':'none';
+  document.getElementById('moral-fields').style.display=(t==='moral')?'block':'none';
+  document.getElementById('dem-row').style.display=(t==='moral')?'none':'flex';
+  document.getElementById('mtype-label').textContent=(t==='moral')?'Personne morale (société)':'Personne physique';
+}
+function buildSociete(){
+  const g=id=>val(id);
+  const nom=g('pm_nom'); if(!nom) return '';
+  let s=nom;
+  const f=g('pm_forme'), cap=g('pm_capital');
+  if(f||cap) s+=', '+(f?f+' ':'')+'au capital social de '+cap;
+  const adr=g('pm_adresse'); if(adr) s+=', dont le siège social est situé '+adr;
+  s+='.';
+  let tail='';
+  const rcs=g('pm_rcs'); if(rcs) tail='Immatriculée au RCS de '+rcs;
+  const siren=g('pm_siren'); if(siren) tail+=(tail?', ':'')+'sous le numéro '+siren;
+  const ger=g('pm_gerant'); if(ger) tail+=(tail?' et ':'')+'représentée par '+ger;
+  if(tail) s+=' '+tail;
+  return s;
+}
 function updateType(){
   const t=document.getElementById('mandate').value, a=ART[t];
   const isSemi = (t==='semi'||t==='semi_sd');
@@ -427,6 +496,8 @@ async function build(download){
     try{ if(window.fontkit){ doc.registerFontkit(window.fontkit); font=await doc.embedFont(b64ToBytes(FONT_B64)); } else throw 0; }
     catch(fe){ console.warn('Police perso indisponible, repli Helvetica'); font=await doc.embedFont(StandardFonts.Helvetica); }
     const pages=doc.getPages(); const col=rgb(0.04,0.31,0.62);
+    // Personne morale : effacer le bloc « Demeurant à » (doublon d'adresse) sur la page 1
+    if(mandantType==='moral'){ pages[0].drawRectangle({x:14,y:H-231,width:572,height:37.5,color:rgb(1,1,1)}); }
     const drawC=(pi,x0,x1,dotTop,txt)=>{ const w=font.widthOfTextAtSize(txt,SIZE); pages[pi].drawText(txt,{x:(x0+x1)/2-w/2,y:H-dotTop+OFF,size:SIZE,font,color:col}); };
     const put=(pi,x,dotTop,txt)=>{ pages[pi].drawText(txt,{x,y:H-dotTop+OFF,size:SIZE,font,color:col}); };
     // Numéro de mandat centré 15 pt sur toutes les pages à en-tête
@@ -435,7 +506,9 @@ async function build(download){
     const recon=radioVal('recon');
     for(const id in c.F){
       if(id==='recon_months') continue;
-      let raw=val(id); if(!raw) continue;
+      if(id==='dem' && mandantType==='moral') continue;   // pas de « Demeurant à » pour une société
+      let raw = (id==='nom' && mandantType==='moral') ? buildSociete() : val(id);
+      if(!raw) continue;
       const v = id==='date' ? fmtDate(raw) : (EUROS.has(id) ? euros(raw) : raw);
       const slots=c.F[id];
       if(CENTER.has(id)){ const s=slots[0]; drawC(s[0],s[1],s[3],s[2],v); }
@@ -494,11 +567,12 @@ function attachAC(inputId){
 }
 (function(){
   const add=(sel,a,b,suf)=>{ for(let d=a;d<=b;d++){ const o=document.createElement('option'); o.value=String(d); o.textContent=d+(suf||''); sel.appendChild(o);} };
-  attachAC('dem'); attachAC('adr');
+  attachAC('dem'); attachAC('adr'); attachAC('pm_adresse');
   add(document.getElementById('jours'),1,60,' jours');
   add(document.getElementById('situation_days'),7,30,' jours');
   add(document.getElementById('recon_months'),1,12,' mois');
   updateType();
+  openMandantModal();
 })();
 </script>
 </body>
