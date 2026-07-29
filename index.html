@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -99,20 +100,24 @@
   </fieldset>
 
   <fieldset>
-    <legend>Situation locative et diagnostics (page 2)</legend>
+    <legend>Situation locative (article 4, page 2)</legend>
     <div class="field full">
-      <label>Article 4 — Situation locative <small>(l'option non retenue sera barrée en bleu)</small></label>
+      <label>Situation locative <small>(l'option non retenue sera barrée en bleu)</small></label>
       <div class="radios">
         <label><input type="radio" name="situ" value="libre"> Libre de toute location, occupation ou réquisition</label>
         <label><input type="radio" name="situ" value="loue"> Loué suivant l'état locatif annexé</label>
         <label><input type="radio" name="situ" value="" checked> Ne rien barrer</label>
       </div>
     </div>
-    <div class="row" style="margin-top:6px">
-      <div class="field full"><label>Art. 5 — Entreprise chargée des diagnostics <small>(si non fournis — 45 car. max)</small></label><input id="ddt_company" maxlength="45"></div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Dossier de Diagnostic Technique (DDT) (article 4, page 2)</legend>
+    <div class="row">
+      <div class="field full"><label>Entreprise chargée des diagnostics <small>(si non fournis par le mandant — 45 car. max)</small></label><input id="ddt_company" maxlength="45"></div>
     </div>
     <div class="row">
-      <div class="field"><label>Art. 5 — Situation connue au plus tard sous <small>(7 à 30 jours)</small></label>
+      <div class="field"><label>Situation connue au plus tard sous <small>(7 à 30 jours)</small></label>
         <select id="situation_days"><option value="">— non précisé —</option></select>
       </div>
     </div>
@@ -145,7 +150,7 @@
       <label>Tacite reconduction <small>(l'option non retenue sera barrée en bleu)</small></label>
       <div class="radios">
         <label><input type="radio" name="recon" value="prorog" onchange="syncMonths()"> Avec prorogation à l'issue des 3 mois</label>
-        <div class="sub-in field" style="max-width:220px">
+        <div class="sub-in" style="max-width:220px;margin-top:2px;margin-bottom:4px;display:flex;flex-direction:column">
           <label>Durée de prorogation <small>(1 à 12 mois)</small></label>
           <select id="recon_months" disabled><option value="">— mois —</option></select>
         </div>
@@ -170,22 +175,28 @@
   </fieldset>
 
   <fieldset>
-    <legend>Mentions à cocher et rayures (pages 5 et 8)</legend>
+    <legend>Article <span id="art_exec">15</span> — Demande d'exécution immédiate</legend>
     <div class="check">
       <input type="checkbox" id="exec">
-      <span class="txt"><b>Demande d'exécution immédiate.</b> Si cochée : la case du mandat est cochée et la mention « Validé par la signature électronique du document » est ajoutée dans l'encadré de signature.</span>
+      <span class="txt">Si cochée : la case du mandat est cochée et la mention « Validé par la signature électronique du document » est ajoutée dans l'encadré de signature.</span>
     </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Article <span id="art_rgpd">28</span> — Consentement prospection commerciale (RGPD)</legend>
     <div class="check">
       <input type="checkbox" id="rgpd">
-      <span class="txt"><b>Consentement prospection commerciale (RGPD).</b> Si cochée : la case du mandat est cochée.</span>
+      <span class="txt">Si cochée : la case « j'accepte de recevoir de la prospection commerciale » est cochée sur le mandat.</span>
     </div>
-    <div style="margin-top:4px">
-      <label>Article 30 — Rayés nul <small>(nombres, centrés — laisser vide si aucun)</small></label>
-      <div class="three">
-        <div class="field"><label style="font-weight:400">Ratures</label><input id="rayes1" inputmode="numeric"></div>
-        <div class="field"><label style="font-weight:400">Mots</label><input id="rayes2" inputmode="numeric"></div>
-        <div class="field"><label style="font-weight:400">Lignes</label><input id="rayes3" inputmode="numeric"></div>
-      </div>
+  </fieldset>
+
+  <fieldset>
+    <legend>Article <span id="art_rayes">30</span> — Rayés nul (ratures)</legend>
+    <label>Nombres à reporter <small>(centrés — laisser vide si aucun)</small></label>
+    <div class="three">
+      <div class="field"><label style="font-weight:400">Ratures</label><input id="rayes1" inputmode="numeric"></div>
+      <div class="field"><label style="font-weight:400">Mots</label><input id="rayes2" inputmode="numeric"></div>
+      <div class="field"><label style="font-weight:400">Lignes</label><input id="rayes3" inputmode="numeric"></div>
     </div>
   </fieldset>
 
@@ -285,7 +296,15 @@ const JOURS=['dimanche','lundi','mardi','mercredi','jeudi','vendredi','samedi'];
 function fmtDate(iso){ const p=iso.split('-'); if(p.length!==3)return iso; const y=+p[0],m=+p[1],d=+p[2];
   const dt=new Date(y,m-1,d); return JOURS[dt.getDay()]+' '+d+' '+MOIS[m-1]+' '+y; }
 
-function updateType(){ document.getElementById('semi-only').style.display = (document.getElementById('mandate').value==='semi') ? 'block' : 'none'; }
+// numéros d'articles variables selon le modèle (les autres — 2,4,5,8,11,12,17 — sont identiques)
+const ART = { excl:{exec:15,rgpd:28,rayes:30}, semi:{exec:14,rgpd:32,rayes:34}, simple:{exec:16,rgpd:29,rayes:31} };
+function updateType(){
+  const t=document.getElementById('mandate').value;
+  document.getElementById('semi-only').style.display = (t==='semi') ? 'block' : 'none';
+  document.getElementById('art_exec').textContent = ART[t].exec;
+  document.getElementById('art_rgpd').textContent = ART[t].rgpd;
+  document.getElementById('art_rayes').textContent = ART[t].rayes;
+}
 function cnt(id,out){document.getElementById(out).textContent=document.getElementById(id).value.length;}
 function syncMonths(){ const on=document.querySelector('input[name="recon"]:checked').value==='prorog';
   const sel=document.getElementById('recon_months'); sel.disabled=!on; if(!on)sel.value=''; }
