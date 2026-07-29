@@ -496,8 +496,6 @@ async function build(download){
     try{ if(window.fontkit){ doc.registerFontkit(window.fontkit); font=await doc.embedFont(b64ToBytes(FONT_B64)); } else throw 0; }
     catch(fe){ console.warn('Police perso indisponible, repli Helvetica'); font=await doc.embedFont(StandardFonts.Helvetica); }
     const pages=doc.getPages(); const col=rgb(0.04,0.31,0.62);
-    // Personne morale : effacer le bloc « Demeurant à » (doublon d'adresse) sur la page 1
-    if(mandantType==='moral'){ pages[0].drawRectangle({x:14,y:H-231,width:572,height:37.5,color:rgb(1,1,1)}); }
     const drawC=(pi,x0,x1,dotTop,txt)=>{ const w=font.widthOfTextAtSize(txt,SIZE); pages[pi].drawText(txt,{x:(x0+x1)/2-w/2,y:H-dotTop+OFF,size:SIZE,font,color:col}); };
     const put=(pi,x,dotTop,txt)=>{ pages[pi].drawText(txt,{x,y:H-dotTop+OFF,size:SIZE,font,color:col}); };
     // Numéro de mandat centré 15 pt sur toutes les pages à en-tête
@@ -506,13 +504,25 @@ async function build(download){
     const recon=radioVal('recon');
     for(const id in c.F){
       if(id==='recon_months') continue;
-      if(id==='dem' && mandantType==='moral') continue;   // pas de « Demeurant à » pour une société
-      let raw = (id==='nom' && mandantType==='moral') ? buildSociete() : val(id);
+      if((id==='nom'||id==='dem') && mandantType==='moral') continue; // société : gérés séparément ci-dessous
+      let raw = val(id);
       if(!raw) continue;
       const v = id==='date' ? fmtDate(raw) : (EUROS.has(id) ? euros(raw) : raw);
       const slots=c.F[id];
       if(CENTER.has(id)){ const s=slots[0]; drawC(s[0],s[1],s[3],s[2],v); }
       else { const lines=wrapToSlots(font,v,slots); for(let i=0;i<lines.length;i++){ const s=slots[Math.min(i,slots.length-1)]; put(s[0],s[1],s[2],lines[i]); } }
+    }
+    // Personne morale : phrase société (jusqu'à 3 lignes) + effacement du bloc « Demeurant à »
+    if(mandantType==='moral'){
+      const erase=(x,w,top,bot)=>pages[0].drawRectangle({x,y:H-bot,width:w,height:bot-top,color:rgb(1,1,1)});
+      erase(14,78,193.5,206.5); // libellé « Demeurant à : »
+      const sentence=buildSociete();
+      if(sentence){
+        const slots=[[0,101.8,171.8,583.9],[0,17.6,190.2,584.7],[0,17.6,208.6,583.9]];
+        const lines=wrapToSlots(font,sentence,slots);
+        if(lines.length<=2) erase(14,572,205,231); else erase(14,572,223,231);
+        for(let i=0;i<lines.length;i++){ const s=slots[i]; put(s[0],s[1],s[2],lines[i]); }
+      } else { erase(14,572,205,231); }
     }
     if(recon==='prorog'){ const m=val('recon_months'); if(m){ const s=c.F.recon_months[0]; drawC(s[0],s[1],s[3],s[2],m); } }
     const situ=radioVal('situ');
