@@ -341,13 +341,13 @@ const NUMX = (411.5+580.6)/2, NUMSIZE = 15, NUMBASE = 50;
 const clone = o => JSON.parse(JSON.stringify(o));
 // carte de base (exclusif) : [pageIndex, x0(début pointillé), hautPointillé, x1(fin pointillé)]
 const F_EXCL = {
-  nom:[[0,101.8,171.8,583.9],[0,17.6,190.2,584.7]],
-  dem:[[0,101.8,208.6,583.9],[0,17.6,227.0,584.7]],
+  nom:[[0,101.8,171.8,583.9],[0,101.8,190.2,584.7]],
+  dem:[[0,101.8,208.6,583.9],[0,101.8,227.0,584.7]],
   tel:[[0,101.8,245.5,583.9]],
   email:[[0,101.8,263.9,583.9]],
-  adr:[[0,64.2,634.3,580.4],[0,17.6,652.7,580.5]],
+  adr:[[0,64.2,634.3,580.4],[0,64.2,652.7,580.5]],
   design:[[0,17.6,697.2,580.5],[0,17.6,715.6,580.5],[0,17.6,734.0,580.5],[0,17.6,752.4,580.5]],
-  syndic:[[0,64.2,770.9,580.4],[0,17.6,789.3,580.5]],
+  syndic:[[0,64.2,770.9,580.4],[0,64.2,789.3,580.5]],
   jours:[[1,221.4,173.0,264.1]],
   reserves:[[1,255.7,301.1,577.7],[1,17.6,319.5,577.7],[1,17.6,337.9,577.7],[1,17.6,356.3,577.7]],
   ddt_company:[[1,17.6,798.3,339.3]],
@@ -456,9 +456,9 @@ function buildSociete(){
   const adr=g('pm_adresse'); if(adr) s+=', dont le siège social est situé '+adr;
   s+='.';
   let tail='';
-  const rcs=g('pm_rcs'); if(rcs) tail='Immatriculée au RCS de '+rcs;
+  const rcs=g('pm_rcs'); if(rcs) tail='immatriculée au RCS de '+rcs;
   const siren=g('pm_siren'); if(siren) tail+=(tail?', ':'')+'sous le numéro '+siren;
-  const ger=g('pm_gerant'); if(ger) tail+=(tail?' et ':'')+'représentée par '+ger;
+  const ger=g('pm_gerant'); if(ger) tail+=(tail?', ':'')+'représentée par '+ger;
   if(tail) s+=' '+tail;
   return s;
 }
@@ -496,6 +496,8 @@ async function build(download){
     try{ if(window.fontkit){ doc.registerFontkit(window.fontkit); font=await doc.embedFont(b64ToBytes(FONT_B64)); } else throw 0; }
     catch(fe){ console.warn('Police perso indisponible, repli Helvetica'); font=await doc.embedFont(StandardFonts.Helvetica); }
     const pages=doc.getPages(); const col=rgb(0.04,0.31,0.62);
+    // Nom et Prénom / Société : le pointillé de la 2e ligne démarre après les deux-points (comme la 1re), pas sous le libellé
+    pages[0].drawRectangle({x:14,y:H-193,width:86,height:5.5,color:rgb(1,1,1)});
     const drawC=(pi,x0,x1,dotTop,txt)=>{ const w=font.widthOfTextAtSize(txt,SIZE); pages[pi].drawText(txt,{x:(x0+x1)/2-w/2,y:H-dotTop+OFF,size:SIZE,font,color:col}); };
     const put=(pi,x,dotTop,txt)=>{ pages[pi].drawText(txt,{x,y:H-dotTop+OFF,size:SIZE,font,color:col}); };
     // Numéro de mandat centré 15 pt sur toutes les pages à en-tête
@@ -516,9 +518,12 @@ async function build(download){
     if(mandantType==='moral'){
       const erase=(x,w,top,bot)=>pages[0].drawRectangle({x,y:H-bot,width:w,height:bot-top,color:rgb(1,1,1)});
       erase(14,78,193.5,206.5); // libellé « Demeurant à : »
+      // remplacer le libellé « Nom et Prénom : » par « La Société : »
+      erase(14,84,156.5,171.0);
+      pages[0].drawText('La Société :',{x:17.6,y:H-166,size:10,font,color:rgb(0.12,0.13,0.17)});
       const sentence=buildSociete();
       if(sentence){
-        const slots=[[0,101.8,171.8,583.9],[0,17.6,190.2,584.7],[0,17.6,208.6,583.9]];
+        const slots=[[0,101.8,171.8,583.9],[0,101.8,190.2,584.7],[0,101.8,208.6,583.9]];
         const lines=wrapToSlots(font,sentence,slots);
         if(lines.length<=2) erase(14,572,205,231); else erase(14,572,223,231);
         for(let i=0;i<lines.length;i++){ const s=slots[i]; put(s[0],s[1],s[2],lines[i]); }
