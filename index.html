@@ -43,6 +43,10 @@
   .note{font-size:12px;color:#7a8494;margin:2px 0 16px;}
   .status{font-size:13px;color:#2c7a34;margin-right:auto;}
   .status.err{color:#b3261e;}
+  .toolbar{display:flex;align-items:center;gap:10px;margin:0 0 16px;}
+  .chk-inline{display:flex;align-items:center;gap:8px;color:#33404f;cursor:pointer;font-weight:600;font-size:13px;}
+  .chk-inline input{width:16px;height:16px;}
+  .privacy{font-size:11.5px;color:#7a8494;border-top:1px solid var(--bord);padding-top:14px;margin-top:26px;line-height:1.5;}
   .sub-in{margin-left:26px;margin-top:4px;}
   .three{display:flex;gap:14px;}
   .three .field{flex:1 1 90px;}
@@ -161,6 +165,9 @@
   </fieldset>
 
   <p class="note">Remplissez les champs puis cliquez sur « Générer le PDF ». Le document est rempli localement dans votre navigateur : aucune donnée n'est envoyée sur un serveur. Pour les prix, saisissez uniquement le chiffre : le montant en toutes lettres est ajouté automatiquement.</p>
+  <div class="toolbar">
+    <label class="chk-inline"><input type="checkbox" id="autosave" onchange="onAutosaveToggle()"> Enregistrer automatiquement le brouillon sur cet ordinateur</label>
+  </div>
 
   <fieldset>
     <legend>Référence</legend>
@@ -329,10 +336,13 @@
       <div class="field"><label>Le <small>(calendrier — ex. « mardi 5 août 1930 »)</small></label><input type="date" id="date"></div>
     </div>
   </fieldset>
+
+  <p class="privacy">Confidentialité : le remplissage et la génération du PDF se font entièrement dans votre navigateur, aucune donnée du mandat n'est envoyée à un serveur. Seules les recherches d'adresse et d'entreprise transmettent votre saisie aux API publiques de l'État (Base Adresse Nationale et Recherche d'entreprises) pour obtenir les suggestions. Le brouillon n'est conservé que si vous cochez l'option en haut de page, et uniquement sur cet ordinateur (rien n'est envoyé ailleurs).</p>
 </div>
 
 <div class="bar">
   <span id="status" class="status"></span>
+  <button class="ghost" onclick="resetForm()">Réinitialiser</button>
   <button class="ghost" onclick="preview()">Aperçu</button>
   <button class="primary" onclick="build(true)">Générer le PDF</button>
 </div>
@@ -495,6 +505,52 @@ function recalcFin(edited){
   }
 }
 
+// --- Validation, brouillon (localStorage), réinitialisation ---
+function luhnOk(s){ s=(''+s).replace(/\D/g,''); if(s.length!==9) return false; let sum=0;
+  for(let i=0;i<9;i++){ let d=+s[i]; if((9-i)%2===0){ d*=2; if(d>9)d-=9; } sum+=d; } return sum%10===0; }
+function validateForm(){
+  const w=[];
+  if(!val('num')) w.push("Le numéro de mandat n'est pas renseigné.");
+  if(!val('pp') && !val('pn')) w.push("Aucun prix (FAI ou net vendeur) n'est renseigné.");
+  const em=val('email'); if(em && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(em)) w.push("L'adresse email semble invalide.");
+  if(mandantType==='moral'){
+    if(!val('pm_nom')) w.push("Le nom de la société n'est pas renseigné.");
+    const si=val('pm_siren'); if(si && !luhnOk(si)) w.push("Le SIREN saisi ne respecte pas la clé de contrôle (chiffre erroné ?).");
+  } else if(!val('nom')) w.push("Le nom du mandant n'est pas renseigné.");
+  return w;
+}
+const DRAFT_KEY='mandat_draft_v1';
+function collectDraft(){
+  const d={ _type:mandantType, _mandate:document.getElementById('mandate').value, _situ:radioVal('situ'), _recon:radioVal('recon') };
+  document.querySelectorAll('input[id],select[id],textarea[id]').forEach(e=>{ if(e.type==='radio')return; if(e.type==='checkbox') d[e.id]=e.checked; else d[e.id]=e.value; });
+  return d;
+}
+function saveDraft(){ if(!document.getElementById('autosave').checked) return; try{ localStorage.setItem(DRAFT_KEY, JSON.stringify(collectDraft())); }catch(e){} }
+function onAutosaveToggle(){ if(document.getElementById('autosave').checked) saveDraft(); else { try{ localStorage.removeItem(DRAFT_KEY); }catch(e){} } }
+function loadDraft(){
+  let d=null; try{ d=JSON.parse(localStorage.getItem(DRAFT_KEY)||'null'); }catch(e){}
+  if(!d) return false;
+  if(d._mandate) document.getElementById('mandate').value=d._mandate;
+  for(const k in d){ if(k[0]==='_') continue; const e=document.getElementById(k); if(!e) continue; if(e.type==='checkbox') e.checked=d[k]; else e.value=d[k]; }
+  if(d._situ!=null){ const r=document.querySelector('input[name="situ"][value="'+d._situ+'"]'); if(r) r.checked=true; }
+  if(d._recon!=null){ const r=document.querySelector('input[name="recon"][value="'+d._recon+'"]'); if(r) r.checked=true; }
+  document.getElementById('autosave').checked=true;
+  updateType(); syncMonths(); setMandantType(d._type==='moral'?'moral':'phys');
+  [['reserves','rc'],['recon_cond','c11'],['art12_cond','c12']].forEach(([id,o])=>{ if(document.getElementById(id)) cnt(id,o); });
+  return true;
+}
+function resetForm(){
+  if(!confirm('Réinitialiser le formulaire ? Toutes les saisies seront effacées.')) return;
+  document.querySelectorAll('input[id],textarea[id]').forEach(e=>{ if(e.type==='radio')return; if(e.type==='checkbox') e.checked=false; else e.value=''; });
+  document.querySelectorAll('select[id]').forEach(s=>{ s.selectedIndex=0; });
+  const s0=document.querySelector('input[name="situ"][value=""]'); if(s0) s0.checked=true;
+  const r0=document.querySelector('input[name="recon"][value=""]'); if(r0) r0.checked=true;
+  ['rc','c11','c12'].forEach(id=>{ const e=document.getElementById(id); if(e) e.textContent='0'; });
+  try{ localStorage.removeItem(DRAFT_KEY); }catch(e){}
+  updateType(); syncMonths(); setMandantType('phys');
+  const st=document.getElementById('status'); st.className='status'; st.textContent='Formulaire réinitialisé.';
+}
+
 // --- Recherche d'entreprises (API publique recherche-entreprises.api.gouv.fr) ---
 function mapForme(code){ code=(''+(code||''));
   if(code.startsWith('54')) return 'SARL';
@@ -574,6 +630,7 @@ function wrapToSlots(font,text,slots){
 }
 async function build(download){
   const st=document.getElementById('status'); st.className='status'; st.textContent='Génération…';
+  if(download){ const wr=validateForm(); if(wr.length && !confirm('Points à vérifier avant de générer :\n\n• '+wr.join('\n• ')+'\n\nGénérer quand même le PDF ?')){ st.textContent='Génération annulée.'; return; } }
   try{
     const {PDFDocument, StandardFonts, rgb} = PDFLib;
     const type=document.getElementById('mandate').value; const c=CFG[type];
@@ -674,7 +731,9 @@ function attachAC(inputId){
   add(document.getElementById('situation_days'),7,30,' jours');
   add(document.getElementById('recon_months'),1,12,' mois');
   updateType();
-  openMandantModal();
+  document.addEventListener('input', saveDraft);
+  document.addEventListener('change', saveDraft);
+  if(!loadDraft()) openMandantModal();
 })();
 </script>
 </body>
