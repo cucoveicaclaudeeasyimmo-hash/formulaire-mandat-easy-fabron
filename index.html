@@ -177,12 +177,16 @@
       <div class="row"><div class="field full"><label>Nom et prénom <small>— tous les co-propriétaires</small></label><input id="nom"></div></div>
     </div>
     <div id="moral-fields" style="display:none">
+      <div class="row"><div class="field full">
+        <label>🔎 Rechercher l'entreprise <small>— nom ou SIREN : les champs se remplissent automatiquement</small></label>
+        <div class="ac-wrap"><input id="pm_search" autocomplete="off" placeholder="ex. EASY RIVIERA IMMO ou 510085798"><ul class="ac-list" id="pm_search_ac"></ul></div>
+      </div></div>
       <div class="row">
         <div class="field"><label>Forme juridique <small>(SAS, SARL, SCI…)</small></label><input id="pm_forme" placeholder="ex. SAS"></div>
         <div class="field"><label>Nom société</label><input id="pm_nom" placeholder="ex. SAS BESS"></div>
       </div>
       <div class="row">
-        <div class="field"><label>Capital social</label><input id="pm_capital" placeholder="ex. 2000 euros"></div>
+        <div class="field"><label>Capital social <small>(à saisir — non fourni par la recherche)</small></label><input id="pm_capital" placeholder="ex. 2000 euros"></div>
         <div class="field"><label>SIREN</label><input id="pm_siren" placeholder="ex. 437 911 316"></div>
       </div>
       <div class="row"><div class="field full"><label>Adresse du siège social <small>(saisie assistée)</small></label><div class="ac-wrap"><input id="pm_adresse" autocomplete="off" placeholder="ex. 71 Boulevard de Cimiez, 06200 Nice"><ul class="ac-list" id="pm_adresse_ac"></ul></div></div></div>
@@ -250,7 +254,7 @@
       <div class="field"><label>Rémunération mandataire <small>(% du prix)</small></label><input id="cpct" placeholder="ex. 5"></div>
       <div class="field"><label>Soit un montant de <small>— chiffre seul, en €</small></label><input id="ceur" inputmode="numeric" placeholder="ex. 27600"></div>
     </div>
-    <p class="note" style="margin:2px 0 0">Le montant en toutes lettres est généré automatiquement (ex. « 580 000 € (Cinq cent quatre-vingt mille euros) »).</p>
+    <p class="note" style="margin:2px 0 0">Calcul automatique : renseignez deux valeurs (les deux dernières saisies), les deux autres se calculent seules. Le % est basé sur le prix net vendeur. Le montant en toutes lettres est généré automatiquement à la création du PDF.</p>
   </fieldset>
 
   <fieldset id="semi-only" style="display:none;background:#fdf6e6;border-color:#e6cf8f">
@@ -462,6 +466,88 @@ function buildSociete(){
   if(tail) s+=' '+tail;
   return s;
 }
+// --- Conditions financières : calcul automatique (base du % = prix net vendeur) ---
+const FIN=['pp','pn','cpct','ceur'];
+const FINVAR={pp:'F',pn:'N',cpct:'p',ceur:'C'};
+const FINOUT={F:'pp',N:'pn',p:'cpct',C:'ceur'};
+let finOrder=['pn','cpct','pp','ceur'];
+function parseNum(s){ if(s==null)return NaN; s=(''+s).replace(/[^\d,.-]/g,'').replace(',','.'); if(s==='')return NaN; return parseFloat(s); }
+function fmtPct(p){ let r=Math.round(p*100)/100; return r.toFixed(2).replace(/\.?0+$/,'').replace('.',','); }
+function solveFin(k){ const has=v=>v!=null&&!isNaN(v)&&isFinite(v); let {N,F,p,C}=k;
+  if(has(N)&&has(p)){ N=Math.round(N); C=Math.round(N*p/100); F=N+C; }
+  else if(has(N)&&has(C)){ N=Math.round(N); C=Math.round(C); F=N+C; p=N?C/N*100:0; }
+  else if(has(N)&&has(F)){ N=Math.round(N); F=Math.round(F); C=F-N; p=N?C/N*100:0; }
+  else if(has(F)&&has(p)){ F=Math.round(F); N=Math.round(F/(1+p/100)); C=F-N; p=N?C/N*100:0; }
+  else if(has(F)&&has(C)){ F=Math.round(F); C=Math.round(C); N=F-C; p=N?C/N*100:0; }
+  else if(has(p)&&has(C)){ C=Math.round(C); N=Math.round(C/(p/100)); F=N+C; p=N?C/N*100:0; }
+  else return null; return {N,F,p,C};
+}
+function recalcFin(edited){
+  finOrder=finOrder.filter(x=>x!==edited); finOrder.unshift(edited);
+  const vals={}; FIN.forEach(id=>{ const v=parseNum(val(id)); if(!isNaN(v)) vals[id]=v; });
+  const knowns=finOrder.filter(id=>id in vals).slice(0,2);
+  if(knowns.length<2) return;
+  const k={}; knowns.forEach(id=>k[FINVAR[id]]=vals[id]);
+  const sol=solveFin(k); if(!sol) return;
+  for(const v in FINOUT){ const id=FINOUT[v]; if(knowns.includes(id)) continue;
+    const num=sol[v]; if(num==null||isNaN(num)||!isFinite(num)) continue;
+    document.getElementById(id).value = (id==='cpct') ? fmtPct(num) : String(Math.round(num));
+  }
+}
+
+// --- Recherche d'entreprises (API publique recherche-entreprises.api.gouv.fr) ---
+function mapForme(code){ code=(''+(code||''));
+  if(code.startsWith('54')) return 'SARL';
+  if(code==='5720') return 'SASU';
+  if(code.startsWith('57')) return 'SAS';
+  if(code.startsWith('55')) return 'SA';
+  if(code.startsWith('654')) return 'SCI';
+  if(code.startsWith('653')||code.startsWith('652')) return 'Société civile';
+  if(code.startsWith('52')) return 'SNC';
+  return ''; }
+function fmtSiren(s){ s=(''+(s||'')).replace(/\D/g,''); return s.replace(/(\d{3})(\d{3})(\d{3})/,'$1 $2 $3'); }
+function tcAddr(s){ return (''+(s||'')).toLowerCase().replace(/\b\p{L}/gu,c=>c.toUpperCase()); }
+function fmtDirigeant(ds){ if(!ds||!ds.length) return '';
+  const d=ds.find(x=>x.type_dirigeant==='personne physique')||ds[0];
+  if(d.type_dirigeant==='personne morale') return d.denomination||'';
+  const tc=s=>s?s.charAt(0).toUpperCase()+s.slice(1).toLowerCase():'';
+  const prenom=tc(((d.prenoms||'').split(/[\s,]+/)[0])||'');
+  const nom=((d.nom||'').split('(')[0].trim()).toUpperCase();
+  return (prenom+' '+nom).trim(); }
+function fillEntreprise(r){
+  const set=(id,v)=>{ const e=document.getElementById(id); if(e&&v) e.value=v; };
+  set('pm_nom', r.nom_raison_sociale||r.nom_complet);
+  set('pm_forme', mapForme(r.nature_juridique));
+  set('pm_siren', fmtSiren(r.siren));
+  const sg=r.siege||{};
+  const voie=[sg.numero_voie,sg.type_voie,sg.libelle_voie].filter(Boolean).join(' ');
+  set('pm_adresse', tcAddr(((voie?voie+', ':'')+(sg.code_postal||'')+' '+(sg.libelle_commune||'')).trim()));
+  set('pm_rcs', tcAddr(sg.libelle_commune||''));
+  set('pm_gerant', fmtDirigeant(r.dirigeants));
+}
+function attachEntreprise(){
+  const input=document.getElementById('pm_search'), list=document.getElementById('pm_search_ac');
+  let timer=null, items=[];
+  const esc=s=>(''+s).replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
+  function close(){ list.style.display='none'; list.innerHTML=''; items=[]; }
+  input.addEventListener('input',()=>{
+    const q=input.value.trim(); clearTimeout(timer);
+    if(q.length<3){ close(); return; }
+    timer=setTimeout(async()=>{
+      try{
+        const r=await fetch('https://recherche-entreprises.api.gouv.fr/search?per_page=7&q='+encodeURIComponent(q));
+        if(!r.ok) return; const j=await r.json();
+        items=j.results||[];
+        if(!items.length){ list.innerHTML='<li style="color:#7a8494;cursor:default">Aucune entreprise trouvée</li>'; list.style.display='block'; return; }
+        list.innerHTML=items.map((x,i)=>{ const v=(x.siege&&x.siege.libelle_commune)||'';
+          return '<li data-i="'+i+'">'+esc(x.nom_complet||x.nom_raison_sociale||'')+' <small style="color:#7a8494">— '+fmtSiren(x.siren)+(v?' — '+esc(tcAddr(v)):'')+'</small></li>'; }).join('');
+        list.style.display='block';
+      }catch(e){ /* réseau/CORS indisponible : saisie manuelle possible */ }
+    },300);
+  });
+  list.addEventListener('mousedown',e=>{ const li=e.target.closest('li'); if(li && li.dataset.i!==undefined){ fillEntreprise(items[+li.dataset.i]); input.value=items[+li.dataset.i].nom_complet||input.value; close(); } });
+  input.addEventListener('blur',()=>setTimeout(close,150));
+}
 function updateType(){
   const t=document.getElementById('mandate').value, a=ART[t];
   const isSemi = (t==='semi'||t==='semi_sd');
@@ -582,7 +668,8 @@ function attachAC(inputId){
 }
 (function(){
   const add=(sel,a,b,suf)=>{ for(let d=a;d<=b;d++){ const o=document.createElement('option'); o.value=String(d); o.textContent=d+(suf||''); sel.appendChild(o);} };
-  attachAC('dem'); attachAC('adr'); attachAC('pm_adresse');
+  attachAC('dem'); attachAC('adr'); attachAC('pm_adresse'); attachEntreprise();
+  FIN.forEach(id=>document.getElementById(id).addEventListener('input',()=>recalcFin(id)));
   add(document.getElementById('jours'),1,60,' jours');
   add(document.getElementById('situation_days'),7,30,' jours');
   add(document.getElementById('recon_months'),1,12,' mois');
